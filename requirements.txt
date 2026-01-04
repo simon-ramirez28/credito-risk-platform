@@ -1,0 +1,21 @@
+# Core
+pandas>=2.0.0
+numpy>=1.24.0
+sqlalchemy>=2.0.0
+
+# Data Generation
+faker>=18.0.0
+
+# Database
+duckdb>=0.8.0  # Alternativa liviana a PostgreSQL
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-mock>=3.0.0
+
+# Documentation
+jupyter>=1.0.0
