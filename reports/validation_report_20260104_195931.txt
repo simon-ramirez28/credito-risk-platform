@@ -1,0 +1,36 @@
+======================================================================
+📋 REPORTE DE VALIDACIÓN DEL MODELO
+======================================================================
+
+🤖 INFORMACIÓN DEL MODELO:
+  Modelo: random_forest_model_20260104_195850.pkl
+  Tipo: random_forest
+  Fecha entrenamiento: 20260104_195850
+  Features: 99
+
+📊 MÉTRICAS DE VALIDACIÓN:
+  accuracy: 1.0000
+  precision: 1.0000
+  recall: 1.0000
+  f1_score: 1.0000
+  roc_auc: 1.0000
+
+🎯 MATRIZ DE CONFUSIÓN:
+  TN: 915 | FP: 0
+  FN: 0 | TP: 85
+  Tamaño de muestra: 1000
+
+📈 DISTRIBUCIÓN DE PREDICCIONES:
+  Clase 0: 915 (91.5%)
+  Clase 1: 85 (8.5%)
+
+📊 DISTRIBUCIÓN DE CATEGORÍAS DE RIESGO:
+  BAJO: 751 (75.1%)
+  MUY_ALTO: 85 (8.5%)
+  MODERADO: 1 (0.1%)
+  ALTO: 0 (0.0%)
+
+🔄 COMPARACIÓN CON MÉTRICAS ORIGINALES:
+  ROC AUC Original: 1.0000
+  ROC AUC Validación: 1.0000
+  Diferencia: +0.0000
