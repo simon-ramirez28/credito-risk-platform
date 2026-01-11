@@ -1,7 +1,7 @@
 {
   "model_type": "random_forest",
-  "model_name": "random_forest_model_20260104_195850",
-  "timestamp": "20260104_195850",
+  "model_name": "random_forest_model_20260110_211947",
+  "timestamp": "20260110_211947",
   "random_state": 42,
   "feature_names": [
     "cliente_id",
@@ -133,6 +133,6 @@
       "balanced_accuracy": 1.0
     }
   },
-  "model_path": "models/random_forest_model_20260104_195850.pkl",
+  "model_path": "models/random_forest_model_20260110_211947.pkl",
   "feature_count": 99
 }

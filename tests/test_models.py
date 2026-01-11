@@ -8,8 +8,7 @@ from sklearn.datasets import make_classification
 from src.models.train_model import CreditRiskModel
 
 
-def create_test_data(n_samples=100, n_features=10):
-    """Crea datos de prueba para entrenamiento."""
+"""def create_test_data(n_samples=100, n_features=10):
     X, y = make_classification(
         n_samples=n_samples,
         n_features=n_features,
@@ -18,6 +17,37 @@ def create_test_data(n_samples=100, n_features=10):
         n_classes=2,
         weights=[0.7, 0.3],  # Clases desbalanceadas
         random_state=42
+    )
+    
+    feature_names = [f'feature_{i}' for i in range(n_features)]
+    df = pd.DataFrame(X, columns=feature_names)
+    df['default'] = y
+    
+    return df"""
+
+# tests/test_models.py - CORREGIR FUNCIÓN create_test_data
+
+def create_test_data(n_samples=100, n_features=10):
+    """Crea datos de prueba para entrenamiento."""
+    # Asegurar que tenemos al menos 1 feature informativa
+    n_informative = max(1, min(5, n_features - 2))  # Cambiado: max(1, ...)
+    n_redundant = max(0, min(2, n_features - n_informative - 1))  # Cambiado: max(0, ...)
+    
+    # Si no hay suficientes features, ajustar
+    if n_informative + n_redundant >= n_features:
+        n_informative = max(1, n_features // 2)
+        n_redundant = max(0, n_features - n_informative - 1)
+    
+    X, y = make_classification(
+        n_samples=n_samples,
+        n_features=n_features,
+        n_informative=n_informative,
+        n_redundant=n_redundant,
+        n_clusters_per_class=1,
+        n_classes=2,
+        weights=[0.7, 0.3],
+        random_state=42,
+        flip_y=0.05
     )
     
     feature_names = [f'feature_{i}' for i in range(n_features)]
@@ -107,6 +137,7 @@ def test_get_feature_importance():
 
 def test_save_model(tmp_path):
     """Prueba el guardado del modelo."""
+    # Usar dataset pequeño
     df = create_test_data(n_samples=50, n_features=3)
     model = CreditRiskModel()
     
