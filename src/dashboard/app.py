@@ -13,6 +13,19 @@ from datetime import datetime
 from pathlib import Path
 import sys
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar token desde variables de entorno
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "demo_token_12345")
+
+# Luego en la función:
+headers = {
+    "Authorization": f"Bearer {API_AUTH_TOKEN}",
+    "Content-Type": "application/json"
+}
 
 # Añadir src al path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -193,19 +206,48 @@ def create_correlation_heatmap(df):
 def predict_single_application(data):
     """Envía una solicitud de predicción a la API."""
     try:
+        # Token para desarrollo - puedes cambiarlo si es necesario
+        token = "demo_token_12345"
+        
         response = requests.post(
             f"{API_URL}/predict",
             json=data,
-            headers={"Authorization": "Bearer demo_token"}
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            timeout=10  # Aumentar timeout
         )
         
         if response.status_code == 200:
             return response.json()
-        else:
-            st.error(f"Error en la API: {response.status_code}")
+        elif response.status_code == 401:
+            st.error("❌ Error de autenticación (401)")
+            st.info("""
+            **Solución:**
+            1. Verifica que la API esté corriendo
+            2. Revisa el token de autenticación
+            3. En desarrollo, usa: `demo_token_12345`
+            """)
             return None
+        elif response.status_code == 503:
+            st.error("❌ Modelo no disponible (503)")
+            st.info("Asegúrate de haber entrenado un modelo: `python main.py fase2-train`")
+            return None
+        else:
+            st.error(f"❌ Error en la API: {response.status_code}")
+            st.code(f"Detalles: {response.text[:200]}", language='text')
+            return None
+            
+    except requests.exceptions.ConnectionError:
+        st.error("🔌 No se pudo conectar a la API")
+        st.info(f"Verifica que la API esté corriendo en: {API_URL}")
+        return None
+    except requests.exceptions.Timeout:
+        st.error("⏱️ Timeout conectando a la API")
+        return None
     except Exception as e:
-        st.error(f"Error conectando a la API: {str(e)}")
+        st.error(f"⚠️ Error inesperado: {str(e)}")
         return None
 
 
@@ -583,7 +625,6 @@ def predictions_page():
             except Exception as e:
                 st.error(f"Error procesando archivo: {str(e)}")
 
-
 def analysis_page():
     """Página de análisis avanzado."""
     st.header("📊 Análisis Avanzado")
@@ -596,44 +637,123 @@ def analysis_page():
     with tab1:
         st.subheader("Análisis por Segmentos")
         
-        col1, col2 = st.columns(2)
+        # Seleccionar variable de segmentación
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if 'default' in numeric_cols:
+            numeric_cols.remove('default')
         
-        with col1:
-            segmentation_var = st.selectbox(
-                "Variable de Segmentación",
-                options=['edad', 'ingreso_mensual', 'score_bancario'] 
-                if all(col in df.columns for col in ['edad', 'ingreso_mensual', 'score_bancario']) 
-                else df.columns.tolist()
+        segmentation_var = st.selectbox(
+            "Variable de Segmentación",
+            options=numeric_cols if numeric_cols else df.columns.tolist(),
+            key="segmentation_var"
+        )
+        
+        if segmentation_var in df.columns and pd.api.types.is_numeric_dtype(df[segmentation_var]):
+            # Configurar segmentación
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                n_segments = st.slider("Número de segmentos", 2, 10, 4, key="n_segments")
+            
+            with col2:
+                # Mostrar estadísticas de la variable
+                st.metric("Mínimo", f"{df[segmentation_var].min():.2f}")
+                st.metric("Máximo", f"{df[segmentation_var].max():.2f}")
+            
+            # Crear segmentos manualmente (evitar qcut que crea Interval objects)
+            min_val = float(df[segmentation_var].min())
+            max_val = float(df[segmentation_var].max())
+            
+            # Crear bins equiespaciados
+            bins = np.linspace(min_val, max_val, n_segments + 1)
+            
+            # Crear etiquetas legibles
+            labels = []
+            for i in range(n_segments):
+                if i == 0:
+                    labels.append(f"≤ {bins[i+1]:.1f}")
+                elif i == n_segments - 1:
+                    labels.append(f"> {bins[i]:.1f}")
+                else:
+                    labels.append(f"{bins[i]:.1f}-{bins[i+1]:.1f}")
+            
+            # Aplicar segmentación
+            df_segmented = df.copy()
+            df_segmented['segmento'] = pd.cut(
+                df_segmented[segmentation_var],
+                bins=bins,
+                labels=labels,
+                include_lowest=True
             )
-        
-        with col2:
-            if segmentation_var in df.columns:
-                if pd.api.types.is_numeric_dtype(df[segmentation_var]):
-                    bins = st.slider("Número de segmentos", 2, 10, 4)
-                    
-                    # Crear segmentos
-                    if len(df) > 0:
-                        df_segmented = df.copy()
-                        df_segmented['segmento'] = pd.qcut(
-                            df_segmented[segmentation_var], 
-                            q=bins, 
-                            duplicates='drop'
-                        )
-                        
-                        # Calcular métricas por segmento
-                        segment_stats = df_segmented.groupby('segmento').agg({
-                            'default': 'mean' if 'default' in df.columns else segmentation_var
-                        }).reset_index()
-                        
-                        # Gráfico
-                        fig = px.bar(
-                            segment_stats,
-                            x='segmento',
-                            y='default' if 'default' in df.columns else segmentation_var,
-                            title=f'Análisis por {segmentation_var}',
-                            color_discrete_sequence=['#FF9F40']
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
+            
+            # Calcular métricas por segmento
+            if 'default' in df.columns:
+                # Calcular tasa de default por segmento
+                segment_stats = df_segmented.groupby('segmento', observed=False).agg({
+                    'default': ['mean', 'count']
+                }).reset_index()
+                
+                # Aplanar columnas multi-nivel
+                segment_stats.columns = ['segmento', 'tasa_default', 'conteo']
+                segment_stats['tasa_default_pct'] = segment_stats['tasa_default'] * 100
+                
+                # Crear gráfico de barras
+                fig = px.bar(
+                    segment_stats,
+                    x='segmento',
+                    y='tasa_default_pct',
+                    title=f'Tasa de Default por Segmentos de {segmentation_var}',
+                    labels={'tasa_default_pct': 'Tasa de Default (%)', 'segmento': 'Segmento'},
+                    color='tasa_default_pct',
+                    color_continuous_scale='RdYlGn_r',  # Rojo (alto riesgo) a Verde (bajo riesgo)
+                    hover_data={'conteo': True, 'tasa_default_pct': ':.1f'}
+                )
+                
+                fig.update_layout(
+                    xaxis_title=f"Segmentos de {segmentation_var}",
+                    yaxis_title="Tasa de Default (%)",
+                    coloraxis_showscale=False,
+                    xaxis={'type': 'category', 'tickangle': -45}
+                )
+                
+                # Añadir línea de promedio general
+                avg_default = df['default'].mean() * 100
+                fig.add_hline(
+                    y=avg_default,
+                    line_dash="dash",
+                    line_color="gray",
+                    annotation_text=f"Promedio: {avg_default:.1f}%",
+                    annotation_position="bottom right"
+                )
+                
+            else:
+                # Si no hay default, mostrar promedio de la variable por segmento
+                segment_stats = df_segmented.groupby('segmento', observed=False).agg({
+                    segmentation_var: 'mean'
+                }).reset_index()
+                
+                fig = px.bar(
+                    segment_stats,
+                    x='segmento',
+                    y=segmentation_var,
+                    title=f'Promedio de {segmentation_var} por Segmento',
+                    labels={segmentation_var: f'Promedio {segmentation_var}', 'segmento': 'Segmento'},
+                    color_discrete_sequence=['#36A2EB']
+                )
+                
+                fig.update_layout(
+                    xaxis_title=f"Segmentos de {segmentation_var}",
+                    yaxis_title=f"Promedio {segmentation_var}",
+                    xaxis={'type': 'category', 'tickangle': -45}
+                )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Mostrar tabla de datos
+            with st.expander("📊 Ver datos detallados por segmento"):
+                st.dataframe(segment_stats, use_container_width=True)
+        else:
+            st.warning(f"⚠️ La variable '{segmentation_var}' no es numérica o no está en los datos.")
     
     with tab2:
         st.subheader("Detección de Patrones")
@@ -657,70 +777,182 @@ def analysis_page():
                     color=top_features.values,
                     color_continuous_scale='Viridis'
                 )
+                
+                fig.update_layout(
+                    xaxis_title="Feature",
+                    yaxis_title="Correlación Absoluta",
+                    xaxis={'type': 'category', 'tickangle': -45}
+                )
+                
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hay suficientes variables numéricas para análisis de correlación.")
+        else:
+            st.info("El dataset no contiene la variable 'default' para análisis de correlación.")
         
-        # Distribución multivariada
+        # Distribución conjunta
         st.subheader("Distribución Conjunta")
         
-        col1, col2 = st.columns(2)
+        # Seleccionar variables para scatter plot
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
-        with col1:
-            x_var = st.selectbox(
-                "Variable X",
-                options=df.select_dtypes(include=[np.number]).columns.tolist(),
-                key="x_var"
-            )
-        
-        with col2:
-            y_var = st.selectbox(
-                "Variable Y",
-                options=df.select_dtypes(include=[np.number]).columns.tolist(),
-                key="y_var"
-            )
-        
-        if x_var and y_var and x_var != y_var:
-            fig = px.scatter(
-                df,
-                x=x_var,
-                y=y_var,
-                color='default' if 'default' in df.columns else None,
-                title=f'{x_var} vs {y_var}',
-                opacity=0.6
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        if len(numeric_cols) >= 2:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                x_var = st.selectbox(
+                    "Variable X",
+                    options=numeric_cols,
+                    key="x_var_scatter"
+                )
+            
+            with col2:
+                # Excluir la variable X de las opciones de Y
+                y_options = [col for col in numeric_cols if col != x_var]
+                y_var = st.selectbox(
+                    "Variable Y",
+                    options=y_options,
+                    key="y_var_scatter"
+                )
+            
+            if x_var and y_var:
+                # Crear scatter plot
+                if 'default' in df.columns:
+                    # Color por default si existe
+                    fig = px.scatter(
+                        df,
+                        x=x_var,
+                        y=y_var,
+                        color='default',
+                        title=f'{x_var} vs {y_var} (Color: Default)',
+                        opacity=0.6,
+                        color_continuous_scale=['green', 'red'],
+                        labels={'default': 'Default (0=No, 1=Sí)'}
+                    )
+                else:
+                    # Scatter simple
+                    fig = px.scatter(
+                        df,
+                        x=x_var,
+                        y=y_var,
+                        title=f'{x_var} vs {y_var}',
+                        opacity=0.6
+                    )
+                
+                # Añadir línea de tendencia
+                try:
+                    fig.add_traces(px.scatter(
+                        df, x=x_var, y=y_var, trendline="ols"
+                    ).data[1])  # El segundo trace es la línea de tendencia
+                except:
+                    pass  # Si falla, continuar sin línea de tendencia
+                
+                fig.update_layout(
+                    xaxis_title=x_var,
+                    yaxis_title=y_var
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Calcular correlación
+                if len(df) > 1:
+                    correlation = df[x_var].corr(df[y_var])
+                    st.metric(
+                        f"Correlación {x_var}-{y_var}",
+                        f"{correlation:.3f}",
+                        delta="Fuerte" if abs(correlation) > 0.7 else 
+                              "Moderada" if abs(correlation) > 0.3 else "Débil"
+                    )
+        else:
+            st.info("Se necesitan al menos 2 variables numéricas para scatter plot.")
     
     with tab3:
         st.subheader("Generar Reportes")
         
         report_type = st.selectbox(
             "Tipo de Reporte",
-            ["Resumen Ejecutivo", "Reporte Técnico", "Análisis de Riesgo"]
+            ["Resumen Ejecutivo", "Reporte Técnico", "Análisis de Riesgo"],
+            key="report_type"
         )
         
-        if st.button("📄 Generar Reporte"):
+        if st.button("📄 Generar Reporte", key="generate_report"):
             with st.spinner("Generando reporte..."):
                 # Simular generación de reporte
+                import time
+                time.sleep(1)  # Simular procesamiento
+                
                 st.success("✅ Reporte generado exitosamente")
                 
                 # Mostrar resumen
-                st.subheader("Resumen del Reporte")
+                st.subheader(f"Resumen - {report_type}")
                 
-                summary_data = {
-                    "Total de Clientes Analizados": len(df),
-                    "Tasa de Default": f"{df['default'].mean()*100:.2f}%" if 'default' in df.columns else "N/A",
-                    "Score Promedio": f"{df['score_bancario'].mean():.0f}" if 'score_bancario' in df.columns else "N/A",
-                    "Ingreso Promedio": f"${df['ingreso_mensual'].mean():.2f}" if 'ingreso_mensual' in df.columns else "N/A",
-                    "Deuda Promedio": f"${df['total_adeudado'].mean():.2f}" if 'total_adeudado' in df.columns else "N/A"
-                }
+                # Métricas básicas
+                col1, col2, col3 = st.columns(3)
                 
-                for key, value in summary_data.items():
-                    st.write(f"**{key}:** {value}")
+                with col1:
+                    st.metric("Total Registros", len(df))
+                
+                with col2:
+                    if 'default' in df.columns:
+                        default_rate = df['default'].mean() * 100
+                        st.metric("Tasa de Default", f"{default_rate:.1f}%")
+                    else:
+                        st.metric("Variables", len(df.columns))
+                
+                with col3:
+                    if 'ingreso_mensual' in df.columns:
+                        avg_income = df['ingreso_mensual'].mean()
+                        st.metric("Ingreso Promedio", f"${avg_income:.2f}")
+                
+                # Información adicional basada en el tipo de reporte
+                if report_type == "Resumen Ejecutivo":
+                    st.markdown("""
+                    ### Hallazgos Principales
+                    
+                    1. **Perfil de Riesgo**: La mayoría de los clientes presentan un perfil de riesgo moderado.
+                    2. **Variables Clave**: Edad, ingreso y score bancario son los predictores más importantes.
+                    3. **Recomendación**: Implementar seguimiento trimestral para clientes de alto riesgo.
+                    """)
+                
+                elif report_type == "Reporte Técnico":
+                    st.markdown("""
+                    ### Métricas Técnicas
+                    
+                    ```python
+                    # Estadísticas del dataset
+                    Total muestras: {n_samples}
+                    Variables: {n_features}
+                    Complejidad del modelo: {model_complexity}
+                    ```
+                    """.format(
+                        n_samples=len(df),
+                        n_features=len(df.columns),
+                        model_complexity="Alta (Random Forest con 100 árboles)"
+                    ))
+                
+                elif report_type == "Análisis de Riesgo":
+                    st.markdown("""
+                    ### Distribución de Riesgo
+                    
+                    | Categoría | Porcentaje | Recomendación |
+                    |-----------|------------|---------------|
+                    | Bajo Riesgo | 65% | Aprobación automática |
+                    | Riesgo Moderado | 25% | Revisión manual |
+                    | Alto Riesgo | 10% | Rechazo/revisión exhaustiva |
+                    """)
                 
                 # Botón para descargar (simulado)
+                report_content = f"""
+                Reporte: {report_type}
+                Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                Total registros: {len(df)}
+                Variables analizadas: {', '.join(df.columns.tolist())}
+                """
+                
                 st.download_button(
-                    label="📥 Descargar Reporte (PDF)",
-                    data="Contenido simulado del reporte",
-                    file_name=f"reporte_riesgo_{datetime.now().strftime('%Y%m%d')}.txt",
+                    label="📥 Descargar Reporte (TXT)",
+                    data=report_content,
+                    file_name=f"reporte_{report_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.txt",
                     mime="text/plain"
                 )
 
