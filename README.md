@@ -722,7 +722,7 @@ Para soporte, por favor:
 2. **Busca issues existentes** en GitHub
 3. **Abre un nuevo issue** si no encuentras solución
 
-**Contacto**: [tu-email@example.com](mailto:ramirezdata22@gmail.com)
+**Contacto**: [ramirezdata22@gmail.com](mailto:ramirezdata22@gmail.com)
 
 **Discusiones**: [GitHub Discussions](https://github.com/simon-ramirez28/credito-risk-platform/discussions)
 
@@ -732,6 +732,6 @@ Para soporte, por favor:
   
 **Hecho con ❤️ para la comunidad de Data Engineering**
 
-[⭐ Da una estrella en GitHub](https://github.com/tu-usuario/credito-risk-platform)
+[⭐ Da una estrella en GitHub](https://github.com/simon-ramirez28/credito-risk-platform)
 
 </div>
