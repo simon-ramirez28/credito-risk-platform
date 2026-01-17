@@ -1,0 +1,54 @@
+name: Continuous Deployment
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Permite ejecución manual
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+    
+    - name: Deploy to server
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "
+          cd /opt/credit-risk-platform &&
+          git pull origin main &&
+          docker-compose pull &&
+          docker-compose up -d --build &&
+          docker system prune -f
+        "
+    
+    - name: Run database migrations
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "
+          cd /opt/credit-risk-platform &&
+          docker-compose exec api python -m alembic upgrade head
+        "
+    
+    - name: Verify deployment
+      run: |
+        sleep 30  # Esperar a que los servicios estén listos
+        curl -f https://${{ secrets.DOMAIN_NAME }}/api/health ||
+        curl -f http://${{ secrets.SERVER_HOST }}:8000/health
+    
+    - name: Send deployment notification
+      uses: 8398a7/action-slack@v3
+      with:
+        channel: '#deployments'
+        status: ${{ job.status }}
+        author_name: GitHub Actions
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
