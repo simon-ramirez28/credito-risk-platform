@@ -23,11 +23,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Download latest data
-      env:
-        DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+    - name: Generate synthetic data
       run: |
-        python scripts/download_data.py
+        python main.py fase1 --clientes 5000 --seed 42
+        python main.py fase2-features
     
     - name: Train model
       env:
@@ -52,6 +51,6 @@ jobs:
       uses: 8398a7/action-slack@v3
       with:
         channel: '#ml-models'
-        text: '🎯 Modelo de riesgo crediticio actualizado exitosamente'
+        text: 'Modelo de riesgo crediticio actualizado exitosamente'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
