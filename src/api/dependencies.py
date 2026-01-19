@@ -1,6 +1,7 @@
 """
 Dependencias y utilidades para la API.
 """
+
 import joblib
 import json
 from typing import Optional
@@ -19,14 +20,14 @@ def get_model():
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Error cargando modelo: {str(e)}"
+            detail=f"Error cargando modelo: {str(e)}",
         )
 
 
 def get_model_metadata():
     """Obtiene metadata del modelo."""
     try:
-        with open(settings.model_metadata_path, 'r') as f:
+        with open(settings.model_metadata_path, "r") as f:
             return json.load(f)
     except Exception as e:
         return {}
@@ -47,6 +48,7 @@ def get_model_metadata():
     # Por ahora, solo verificar que no esté vacío
     return len(token) > 10"""
 
+
 def validate_token(token: str) -> bool:
     """
     Valida un token JWT.
@@ -57,10 +59,11 @@ def validate_token(token: str) -> bool:
         # Aceptar tokens comunes de desarrollo
         valid_tokens = ["demo_token", "test_token", "dev_token", "bearer_token"]
         return token in valid_tokens or token.startswith("demo_")
-    
+
     # EN PRODUCCIÓN: Validación real con JWT
     # Por ahora, misma lógica simplificada
     return token.startswith("demo_") or len(token) > 10
+
 
 def get_current_user(token: str):
     """
@@ -68,9 +71,8 @@ def get_current_user(token: str):
     """
     if not validate_token(token):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
         )
-    
+
     # En producción, decodificar el token JWT para obtener usuario
     return {"username": "demo_user", "role": "user"}

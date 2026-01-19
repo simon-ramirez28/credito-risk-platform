@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pycache/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Data (puedes excluir datos grandes)
+data/raw/
+data/processed/
+data/features/
+
+# Models (opcional, depende del tamaño)
+models/*.pkl
+models/*.joblib
+
+# Tests
+htmlcov/
+.coverage
