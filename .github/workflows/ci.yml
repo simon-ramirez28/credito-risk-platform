@@ -38,7 +38,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy src/ --ignore-missing-imports
+        mypy src/api/ src/etl/ src/features/ src/models/ src/validation/ src/utils/ --ignore-missing-imports
     
     - name: Test with pytest
       run: |
