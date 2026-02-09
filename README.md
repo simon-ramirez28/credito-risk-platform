@@ -262,7 +262,7 @@ python main.py fase1 --clientes 1000
 python main.py fase2-features
 
 # Solo entrenamiento de modelo
-python main.py fase2-train --model-type random_forest --tune-hyperparams
+python main.py fase2-train --model-type random_forest --tune-hyperparams --output-dir ./models/production
 
 # Solo validación
 python main.py fase2-validate

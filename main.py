@@ -161,7 +161,8 @@ def fase2_entrenar_modelo(args):
     model.evaluate(X_test, y_test)
     
     # Guardar modelo
-    saved_files = model.save_model(output_dir='models')
+    output_dir = getattr(args, 'output_dir', 'models')
+    saved_files = model.save_model(output_dir=output_dir)
     
     # Mostrar reporte
     print("\n" + model.create_model_report())
@@ -283,6 +284,8 @@ Ejemplos de uso:
                                    help='Realizar búsqueda de hiperparámetros')
     parser_fase2_train.add_argument('--random-state', type=int, default=42,
                                    help='Semilla para reproducibilidad')
+    parser_fase2_train.add_argument('--output-dir', type=str, default='models',
+                                   help='Directorio donde guardar el modelo')
     
     parser_fase2_validate = subparsers.add_parser('fase2-validate', help='Validar modelo')
     parser_fase2_validate.add_argument('--data', type=str, help='Datos para validación (opcional)')
