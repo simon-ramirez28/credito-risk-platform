@@ -25,6 +25,10 @@ from .schemas import (
     HealthCheck,
 )
 from .dependencies import get_model, validate_token
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from features.feature_engineering import CreditFeatureEngineer
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -172,6 +176,23 @@ async def predict(
     try:
         # Convertir solicitud a DataFrame
         input_data = application.dict()
+        
+        # Lista para almacenar advertencias
+        warnings = []
+        
+        # Verificar y ajustar gastos si exceden el 90% del ingreso
+        ingreso = input_data.get("ingreso_mensual", 0)
+        gastos = input_data.get("gastos_mensuales", 0)
+        gastos_maximos = ingreso * 0.9
+        
+        if gastos > gastos_maximos:
+            # Ajustar gastos al 90% del ingreso
+            input_data["gastos_mensuales"] = gastos_maximos
+            warnings.append(
+                f"Los gastos mensuales fueron ajustados de ${gastos:.2f} a ${gastos_maximos:.2f} "
+                f"(90% del ingreso mensual) para cumplir con la política de crédito."
+            )
+            logger.warning(f"Gastos ajustados: {gastos} -> {gastos_maximos}")
 
         # Preparar datos para el modelo
         df = pd.DataFrame([input_data])
@@ -198,13 +219,20 @@ async def predict(
         risk_score = calculate_risk_score(probability[0][1])
         risk_category = categorize_risk(risk_score)
 
+        # Preparar mensaje según haya advertencias o no
+        if warnings:
+            message = "Predicción completada con ajustes en los datos de entrada"
+        else:
+            message = "Predicción completada exitosamente"
+
         return PredictionResponse(
             prediction=int(prediction[0]),
             probability_default=float(probability[0][1]),
             risk_score=risk_score,
             risk_category=risk_category,
             features_used=app.state.feature_names[:10],  # Mostrar solo primeras 10
-            message="Predicción completada exitosamente",
+            message=message,
+            warnings=warnings if warnings else None,
         )
 
     except Exception as e:
@@ -240,8 +268,22 @@ async def predict_batch(
 
         for i, app_data in enumerate(applications):
             try:
+                # Convertir a dict y verificar ajuste de gastos
+                input_data = app_data.dict()
+                application_warnings = []
+                
+                ingreso = input_data.get("ingreso_mensual", 0)
+                gastos = input_data.get("gastos_mensuales", 0)
+                gastos_maximos = ingreso * 0.9
+                
+                if gastos > gastos_maximos:
+                    input_data["gastos_mensuales"] = gastos_maximos
+                    application_warnings.append(
+                        f"Gastos ajustados de ${gastos:.2f} a ${gastos_maximos:.2f}"
+                    )
+                
                 # Preparar datos
-                df = pd.DataFrame([app_data.dict()])
+                df = pd.DataFrame([input_data])
                 df = prepare_input_data(df, app.state.feature_names)
 
                 # Rellenar features faltantes
@@ -256,6 +298,12 @@ async def predict_batch(
                 probability = app.state.model.predict_proba(df)
                 risk_score = calculate_risk_score(probability[0][1])
                 risk_category = categorize_risk(risk_score)
+                
+                # Preparar status
+                if application_warnings:
+                    status_msg = "success (adjusted)"
+                else:
+                    status_msg = "success"
 
                 predictions.append(
                     {
@@ -264,7 +312,8 @@ async def predict_batch(
                         "probability_default": float(probability[0][1]),
                         "risk_score": risk_score,
                         "risk_category": risk_category,
-                        "status": "success",
+                        "status": status_msg,
+                        "warnings": application_warnings if application_warnings else None,
                     }
                 )
 
@@ -316,43 +365,38 @@ async def get_features():
 
 def prepare_input_data(df: pd.DataFrame, feature_names: list) -> pd.DataFrame:
     """
-    Prepara los datos de entrada aplicando transformaciones necesarias.
+    Prepara los datos de entrada aplicando feature engineering avanzado.
     """
     df_processed = df.copy()
 
-    # Aplicar transformaciones básicas
-    # 1. Calcular ratios si faltan
-    if (
-        "ingreso_mensual" in df_processed.columns
-        and "gastos_mensuales" in df_processed.columns
-    ):
-        if "capacidad_pago" not in df_processed.columns:
-            df_processed["capacidad_pago"] = (
-                df_processed["ingreso_mensual"] - df_processed["gastos_mensuales"]
-            )
+    # Aplicar feature engineering completo usando CreditFeatureEngineer
+    try:
+        engineer = CreditFeatureEngineer(target_col='default')
+        df_processed = engineer.create_advanced_features(df_processed)
+        df_processed = engineer.prepare_features_for_ml(df_processed)
+        logger.info(f"Feature engineering aplicado: {len(df_processed.columns)} features creadas")
+    except Exception as e:
+        logger.warning(f"Error en feature engineering: {e}. Aplicando transformaciones básicas.")
+        
+        # Fallback: transformaciones básicas
+        if (
+            "ingreso_mensual" in df_processed.columns
+            and "gastos_mensuales" in df_processed.columns
+        ):
+            if "capacidad_pago" not in df_processed.columns:
+                df_processed["capacidad_pago"] = (
+                    df_processed["ingreso_mensual"] - df_processed["gastos_mensuales"]
+                )
 
-    # 2. Calcular edad si no está presente
-    if (
-        "fecha_nacimiento" in df_processed.columns
-        and "edad" not in df_processed.columns
-    ):
-        # Asumir formato YYYY-MM-DD
-        try:
-            birth_dates = pd.to_datetime(df_processed["fecha_nacimiento"])
-            today = pd.Timestamp.now()
-            df_processed["edad"] = (today - birth_dates).dt.days // 365
-        except:
-            df_processed["edad"] = 35  # Valor por defecto
-
-    # 3. Codificar variables categóricas básicas
-    categorical_mappings = {
-        "genero": {"M": 0, "F": 1},
-        "estado_civil": {"soltero": 0, "casado": 1, "divorciado": 2, "viudo": 3},
+        # Codificar variables categóricas básicas
+        categorical_mappings = {
+            "genero": {"M": 0, "F": 1},
+            "estado_civil": {"soltero": 0, "casado": 1, "divorciado": 2, "viudo": 3},
     }
 
-    for col, mapping in categorical_mappings.items():
-        if col in df_processed.columns:
-            df_processed[col] = df_processed[col].map(mapping).fillna(0)
+        for col, mapping in categorical_mappings.items():
+            if col in df_processed.columns:
+                df_processed[col] = df_processed[col].map(mapping).fillna(0)
 
     return df_processed
 

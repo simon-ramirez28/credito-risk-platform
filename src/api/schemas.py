@@ -73,11 +73,8 @@ class CreditApplication(BaseModel):
 
     @validator("gastos_mensuales")
     def validate_expenses(cls, v, values):
-        """Valida que los gastos no excedan el ingreso."""
-        if "ingreso_mensual" in values and v > values["ingreso_mensual"] * 0.9:
-            raise ValueError(
-                "Los gastos mensuales no pueden exceder el 90% del ingreso"
-            )
+        """Valida que los gastos no excedan el ingreso (pero permite ajuste posterior)."""
+        # Solo advertimos pero no bloqueamos - el ajuste se hará en la API
         return v
 
 
@@ -96,6 +93,9 @@ class PredictionResponse(BaseModel):
         ..., description="Features utilizadas en la predicción"
     )
     message: str = Field(..., description="Mensaje descriptivo")
+    warnings: Optional[List[str]] = Field(
+        None, description="Advertencias sobre los datos de entrada"
+    )
 
 
 class BatchPredictionRequest(BaseModel):
