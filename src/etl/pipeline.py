@@ -352,7 +352,7 @@ class PipelineETLCrediticio:
 
     def _generar_reporte_calidad(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Genera un reporte de calidad de datos."""
-        reporte = {
+        reporte: Dict[str, Any] = {
             "registros_totales": len(df),
             "registros_nulos": {},
             "valores_unicos": {},

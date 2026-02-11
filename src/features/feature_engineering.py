@@ -35,11 +35,11 @@ class CreditFeatureEngineer:
         """
         self.target_col = target_col
         self.random_state = random_state
-        self.scaler = None
-        self.imputer = None
-        self.encoder = None
-        self.feature_names = None
-        self.feature_metadata = {}
+        self.scaler: Optional[StandardScaler] = None
+        self.imputer: Optional[SimpleImputer] = None
+        self.encoder: Optional[ce.TargetEncoder] = None
+        self.feature_names: Optional[List[str]] = None
+        self.feature_metadata: Dict[str, Any] = {}
 
         logger.info(f"Feature engineer inicializado con target: {target_col}")
 
@@ -383,13 +383,15 @@ class CreditFeatureEngineer:
         # 6. Guardar nombres de features finales
         self.feature_names = X.columns.tolist()
         self.feature_metadata["final_features"] = self.feature_names
-        self.feature_metadata["feature_count"] = len(self.feature_names)
+        if self.feature_names is not None:
+            self.feature_metadata["feature_count"] = len(self.feature_names)
 
         # 7. Añadir target de nuevo si existía
         if self.target_col in df.columns:
             X[self.target_col] = y.values
 
-        logger.info(f"Features preparadas: {len(self.feature_names)} columnas")
+        if self.feature_names is not None:
+            logger.info(f"Features preparadas: {len(self.feature_names)} columnas")
         return X
 
     def get_feature_importance(

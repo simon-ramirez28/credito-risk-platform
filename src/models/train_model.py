@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 import joblib
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 
 # Scikit-learn imports
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
@@ -53,10 +53,10 @@ class CreditRiskModel:
         self.random_state = random_state
         self.model = None
         self.scaler = None
-        self.feature_names = None
+        self.feature_names: Optional[List[str]] = None
         self.target_name = "default"
-        self.metrics = {}
-        self.best_params = {}
+        self.metrics: Dict[str, Any] = {}
+        self.best_params: Dict[str, Any] = {}
 
         # Inicializar modelo basado en tipo
         self._initialize_model()
@@ -115,7 +115,8 @@ class CreditRiskModel:
 
         # Guardar nombres de features
         self.feature_names = X.columns.tolist()
-        logger.info(f"Número de features: {len(self.feature_names)}")
+        if self.feature_names is not None:
+            logger.info(f"Número de features: {len(self.feature_names)}")
         logger.info(f"Distribución de clases: {dict(y.value_counts())}")
 
         # Split train-test
@@ -210,9 +211,13 @@ class CreditRiskModel:
             self.metrics["cv_std"] = float(cv_scores.std())
 
         # Entrenar con todos los datos
+        if self.model is None:
+            raise ValueError("Modelo no inicializado")
         self.model.fit(X_train_balanced, y_train_balanced)
 
         # Calcular métricas en training
+        if self.model is None:
+            raise ValueError("Modelo no entrenado")
         y_train_pred = self.model.predict(X_train_balanced)
         y_train_proba = self.model.predict_proba(X_train_balanced)[:, 1]
 
@@ -239,6 +244,9 @@ class CreditRiskModel:
         """
         logger.info("Evaluando modelo en test set...")
 
+        if self.model is None:
+            raise ValueError("Modelo no entrenado")
+        
         # Predecir
         y_test_pred = self.model.predict(X_test)
         y_test_proba = self.model.predict_proba(X_test)[:, 1]
